@@ -26,6 +26,10 @@ Environs storage precedence:
 1. `SPIRITED_ENV_HOME`
 2. `<config-base>/environs`
 
+Backup storage path:
+
+- `<config-base>/backups/<canonical-source-file-path>`
+
 ## Config File
 
 `spirited-env` reads optional configuration from `<config-base>/config.yaml`.
@@ -60,6 +64,8 @@ spirited-env edit [dir]
 spirited-env load [dir] --shell bash|zsh|fish
 spirited-env status [dir]
 spirited-env move <old-dir> <new-dir> [--force]
+spirited-env import [dir] [--from <path>] [--replace]
+spirited-env migrate [dir] [--from <path>] [--replace]
 spirited-env config show
 spirited-env state show
 spirited-env state reset --shell bash|zsh|fish
@@ -67,6 +73,23 @@ spirited-env init bash|zsh|fish
 spirited-env doctor
 spirited-env version
 ```
+
+## Migration from direnv
+
+You can import or migrate `.envrc` files into the centralized spirited-env mapping.
+
+```bash
+spirited-env import .
+spirited-env migrate .
+spirited-env import . --from ./custom.envrc --replace
+```
+
+Behavior:
+
+- `import`: reads source assignments and writes them into the mapped `.env` file.
+- `migrate`: performs import, then moves the source file into centralized backups.
+- supported source lines: `KEY=VALUE` and `export KEY=VALUE` (plus comments/blank lines).
+- unsupported shell syntax fails hard, reports all invalid lines, and writes nothing.
 
 ## Shell Integration (Print-Only)
 

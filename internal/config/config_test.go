@@ -22,6 +22,9 @@ func TestResolvePathsUsesConfigOverride(t *testing.T) {
 	if paths.EnvironsDir != "/tmp/spirited-config/environs" {
 		t.Fatalf("EnvironsDir = %q", paths.EnvironsDir)
 	}
+	if paths.BackupDir != "/tmp/spirited-config/backups" {
+		t.Fatalf("BackupDir = %q", paths.BackupDir)
+	}
 }
 
 func TestResolvePathsUsesXDGAndEnvironsOverride(t *testing.T) {
@@ -40,6 +43,9 @@ func TestResolvePathsUsesXDGAndEnvironsOverride(t *testing.T) {
 	if paths.EnvironsDir != "/tmp/custom-environs" {
 		t.Fatalf("EnvironsDir = %q", paths.EnvironsDir)
 	}
+	if paths.BackupDir != "/tmp/xdg/spirited-env/backups" {
+		t.Fatalf("BackupDir = %q", paths.BackupDir)
+	}
 }
 
 func TestResolvePathsFallsBackToDotConfig(t *testing.T) {
@@ -56,6 +62,9 @@ func TestResolvePathsFallsBackToDotConfig(t *testing.T) {
 
 	if paths.BaseConfigDir != filepath.Join(home, ".config", "spirited-env") {
 		t.Fatalf("BaseConfigDir = %q", paths.BaseConfigDir)
+	}
+	if paths.BackupDir != filepath.Join(home, ".config", "spirited-env", "backups") {
+		t.Fatalf("BackupDir = %q", paths.BackupDir)
 	}
 }
 

@@ -14,6 +14,8 @@ type CLI struct {
 	Load    app.LoadCmd    `cmd:"" help:"Emit shell commands for loading env."`
 	Status  app.StatusCmd  `cmd:"" help:"Show discovered env file and key info."`
 	Move    app.MoveCmd    `cmd:"" help:"Move mapped env file to a new directory mapping."`
+	Import  app.ImportCmd  `cmd:"" help:"Import env assignments from existing file into spirited-env mapping."`
+	Migrate app.MigrateCmd `cmd:"" help:"Import env assignments and move source file to centralized backup."`
 	Config  app.ConfigCmd  `cmd:"" help:"Show effective configuration."`
 	State   app.StateCmd   `cmd:"" help:"Inspect or reset internal shell state."`
 	Init    app.InitCmd    `cmd:"" help:"Print shell integration snippet."`

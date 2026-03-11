@@ -27,6 +27,7 @@ const (
 type Paths struct {
 	BaseConfigDir string
 	EnvironsDir   string
+	BackupDir     string
 	ConfigFile    string
 }
 
@@ -54,6 +55,7 @@ func ResolvePaths() (Paths, error) {
 	return Paths{
 		BaseConfigDir: base,
 		EnvironsDir:   environs,
+		BackupDir:     filepath.Join(base, "backups"),
 		ConfigFile:    filepath.Join(base, "config.yaml"),
 	}, nil
 }

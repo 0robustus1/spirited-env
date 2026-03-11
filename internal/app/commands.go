@@ -8,11 +8,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/0robustus1/spirited-env/internal/config"
 	"github.com/0robustus1/spirited-env/internal/discovery"
 	"github.com/0robustus1/spirited-env/internal/dotenv"
+	"github.com/0robustus1/spirited-env/internal/importer"
 	"github.com/0robustus1/spirited-env/internal/loader"
 	"github.com/0robustus1/spirited-env/internal/pathmap"
 	"github.com/0robustus1/spirited-env/internal/shell"
@@ -175,6 +178,18 @@ type MoveCmd struct {
 	Force  bool   `help:"Overwrite existing destination env file."`
 }
 
+type ImportCmd struct {
+	Dir     string `arg:"" optional:"" help:"Directory whose mapping should receive imported variables (default: current directory)." type:"path"`
+	From    string `help:"Source file to import (default: <dir>/.envrc)." type:"path"`
+	Replace bool   `help:"Replace destination env file instead of merging."`
+}
+
+type MigrateCmd struct {
+	Dir     string `arg:"" optional:"" help:"Directory whose mapping should receive migrated variables (default: current directory)." type:"path"`
+	From    string `help:"Source file to migrate (default: <dir>/.envrc)." type:"path"`
+	Replace bool   `help:"Replace destination env file instead of merging."`
+}
+
 func (c *MoveCmd) Run(rt *Runtime) error {
 	if rt.ConfigErr != nil {
 		return fmt.Errorf("load config: %w", rt.ConfigErr)
@@ -219,6 +234,14 @@ func (c *MoveCmd) Run(rt *Runtime) error {
 
 	fmt.Printf("moved %s -> %s\n", source, destination)
 	return nil
+}
+
+func (c *ImportCmd) Run(rt *Runtime) error {
+	return runImportOrMigrate(rt, c.Dir, c.From, c.Replace, false)
+}
+
+func (c *MigrateCmd) Run(rt *Runtime) error {
+	return runImportOrMigrate(rt, c.Dir, c.From, c.Replace, true)
 }
 
 type InitCmd struct {
@@ -456,4 +479,219 @@ func currentEnvMap() map[string]string {
 		env[item[:eq]] = item[eq+1:]
 	}
 	return env
+}
+
+func runImportOrMigrate(rt *Runtime, dirArg, fromArg string, replace bool, migrate bool) error {
+	if rt.ConfigErr != nil {
+		return fmt.Errorf("load config: %w", rt.ConfigErr)
+	}
+
+	targetDir, err := pathmap.CanonicalizeDir(dirArg)
+	if err != nil {
+		return err
+	}
+
+	sourcePath, err := resolveSourcePath(targetDir, fromArg)
+	if err != nil {
+		return err
+	}
+
+	sourceContent, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read source file %s: %w", sourcePath, err)
+	}
+
+	importedValues, issues, err := importer.ParseAssignmentsAll(string(sourceContent))
+	if err != nil {
+		return err
+	}
+	if len(issues) > 0 {
+		var b strings.Builder
+		b.WriteString("failed to import: unsupported or invalid lines in source\n")
+		for _, issue := range issues {
+			b.WriteString(fmt.Sprintf("line %d: %s | %s\n", issue.Line, issue.Reason, issue.Content))
+		}
+		return errors.New(strings.TrimSuffix(b.String(), "\n"))
+	}
+
+	destinationPath, err := rt.Mapper.EnvFileForDir(targetDir)
+	if err != nil {
+		return err
+	}
+
+	mergedValues := importedValues
+	if !replace {
+		existingValues, readErr := readExistingEnvFile(destinationPath)
+		if readErr != nil {
+			return readErr
+		}
+		mergedValues = existingValues
+		for k, v := range importedValues {
+			mergedValues[k] = v
+		}
+	}
+
+	if err := writeEnvMapping(destinationPath, mergedValues, rt.Settings.DirectoryMode, rt.Settings.FileMode); err != nil {
+		return err
+	}
+
+	modeLabel := "merge"
+	if replace {
+		modeLabel = "replace"
+	}
+
+	if !migrate {
+		fmt.Printf("imported %d keys from %s -> %s (mode=%s)\n", len(importedValues), sourcePath, destinationPath, modeLabel)
+		return nil
+	}
+
+	canonicalSource, err := filepath.EvalSymlinks(sourcePath)
+	if err != nil {
+		return fmt.Errorf("canonicalize source for backup: %w", err)
+	}
+
+	backupPath, err := backupPathForSource(rt.Paths.BackupDir, canonicalSource)
+	if err != nil {
+		return err
+	}
+	backupPath, err = ensureUniqueBackupPath(backupPath)
+	if err != nil {
+		return err
+	}
+
+	if err := moveSourceToBackup(sourcePath, backupPath, rt.Settings.DirectoryMode); err != nil {
+		return err
+	}
+
+	fmt.Printf("migrated %d keys from %s -> %s (mode=%s, backup=%s)\n", len(importedValues), sourcePath, destinationPath, modeLabel, backupPath)
+	return nil
+}
+
+func resolveSourcePath(targetDir, fromArg string) (string, error) {
+	if strings.TrimSpace(fromArg) == "" {
+		return filepath.Join(targetDir, ".envrc"), nil
+	}
+	abs, err := filepath.Abs(fromArg)
+	if err != nil {
+		return "", fmt.Errorf("resolve source path %q: %w", fromArg, err)
+	}
+	return filepath.Clean(abs), nil
+}
+
+func readExistingEnvFile(path string) (map[string]string, error) {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+
+	values, err := parseEnvFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse existing destination env file %s: %w", path, err)
+	}
+	return values, nil
+}
+
+func writeEnvMapping(path string, values map[string]string, dirMode os.FileMode, fileMode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
+		return fmt.Errorf("create destination directory: %w", err)
+	}
+
+	content := renderEnvFile(values)
+	if err := os.WriteFile(path, []byte(content), fileMode); err != nil {
+		return fmt.Errorf("write destination env file %s: %w", path, err)
+	}
+	if err := os.Chmod(path, fileMode); err != nil {
+		return fmt.Errorf("enforce destination env file mode on %s: %w", path, err)
+	}
+	return nil
+}
+
+func renderEnvFile(values map[string]string) string {
+	keys := make([]string, 0, len(values))
+	for k := range values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	for _, key := range keys {
+		b.WriteString(key)
+		b.WriteString("=")
+		b.WriteString(strconv.Quote(values[key]))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func backupPathForSource(backupRoot, sourcePath string) (string, error) {
+	abs, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve backup source path %q: %w", sourcePath, err)
+	}
+
+	relative := strings.TrimPrefix(filepath.Clean(abs), string(filepath.Separator))
+	if relative == "" {
+		return "", fmt.Errorf("cannot derive backup path for source %q", sourcePath)
+	}
+
+	return filepath.Join(backupRoot, relative), nil
+}
+
+func ensureUniqueBackupPath(path string) (string, error) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return path, nil
+	}
+
+	ext := filepath.Ext(path)
+	base := strings.TrimSuffix(path, ext)
+	candidate := fmt.Sprintf("%s.%s.bak", base, time.Now().Format("20060102-150405"))
+	if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+		return candidate, nil
+	}
+
+	for i := 1; i <= 1000; i++ {
+		withCounter := fmt.Sprintf("%s.%03d", candidate, i)
+		if _, err := os.Stat(withCounter); errors.Is(err, os.ErrNotExist) {
+			return withCounter, nil
+		}
+	}
+
+	return "", fmt.Errorf("unable to allocate unique backup path for %s", path)
+}
+
+func moveSourceToBackup(sourcePath, backupPath string, dirMode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(backupPath), dirMode); err != nil {
+		return fmt.Errorf("create backup directory: %w", err)
+	}
+
+	if err := os.Rename(sourcePath, backupPath); err == nil {
+		return nil
+	}
+
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return fmt.Errorf("stat source before backup: %w", err)
+	}
+
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open source for backup: %w", err)
+	}
+	defer source.Close()
+
+	target, err := os.OpenFile(backupPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, info.Mode().Perm())
+	if err != nil {
+		return fmt.Errorf("create backup file: %w", err)
+	}
+	defer target.Close()
+
+	if _, err := io.Copy(target, source); err != nil {
+		return fmt.Errorf("copy source to backup: %w", err)
+	}
+	if err := os.Remove(sourcePath); err != nil {
+		return fmt.Errorf("remove source after backup: %w", err)
+	}
+	return nil
 }
