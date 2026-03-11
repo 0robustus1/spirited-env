@@ -35,3 +35,49 @@ func TestEnvFileForDir(t *testing.T) {
 		t.Fatalf("mapped = %q, want %q", mapped, expected)
 	}
 }
+
+func TestDefaultRootUsesOverride(t *testing.T) {
+	t.Setenv(HomeOverrideEnv, "/tmp/custom-spirited")
+	t.Setenv(XDGConfigHomeEnv, "/tmp/xdg")
+
+	root, err := defaultRoot()
+	if err != nil {
+		t.Fatalf("defaultRoot() error = %v", err)
+	}
+
+	if root != "/tmp/custom-spirited" {
+		t.Fatalf("root = %q, want %q", root, "/tmp/custom-spirited")
+	}
+}
+
+func TestDefaultRootUsesXDGConfigHome(t *testing.T) {
+	t.Setenv(HomeOverrideEnv, "")
+	t.Setenv(XDGConfigHomeEnv, "/tmp/xdg")
+
+	root, err := defaultRoot()
+	if err != nil {
+		t.Fatalf("defaultRoot() error = %v", err)
+	}
+
+	expected := filepath.Join("/tmp/xdg", "spirited-env", "environs")
+	if root != expected {
+		t.Fatalf("root = %q, want %q", root, expected)
+	}
+}
+
+func TestDefaultRootFallsBackToDotConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(HomeOverrideEnv, "")
+	t.Setenv(XDGConfigHomeEnv, "")
+	t.Setenv("HOME", home)
+
+	root, err := defaultRoot()
+	if err != nil {
+		t.Fatalf("defaultRoot() error = %v", err)
+	}
+
+	expected := filepath.Join(home, ".config", "spirited-env", "environs")
+	if root != expected {
+		t.Fatalf("root = %q, want %q", root, expected)
+	}
+}

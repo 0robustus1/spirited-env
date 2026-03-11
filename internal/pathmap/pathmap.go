@@ -8,6 +8,7 @@ import (
 )
 
 const HomeOverrideEnv = "SPIRITED_ENV_HOME"
+const XDGConfigHomeEnv = "XDG_CONFIG_HOME"
 
 type Mapper struct {
 	Root string
@@ -30,12 +31,16 @@ func defaultRoot() (string, error) {
 		return filepath.Clean(custom), nil
 	}
 
-	userConfig, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user config dir: %w", err)
+	if xdg := strings.TrimSpace(os.Getenv(XDGConfigHomeEnv)); xdg != "" {
+		return filepath.Join(filepath.Clean(xdg), "spirited-env", "environs"), nil
 	}
 
-	return filepath.Join(userConfig, "spirited-env", "environs"), nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home dir: %w", err)
+	}
+
+	return filepath.Join(home, ".config", "spirited-env", "environs"), nil
 }
 
 func CanonicalizeDir(dir string) (string, error) {

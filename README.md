@@ -16,6 +16,12 @@ go install github.com/0robustus1/spirited-env/cmd/spirited-env@latest
 - Mapping directories are created with mode `0700`.
 - `.env` files are created/enforced with mode `0600`.
 
+Config root precedence:
+
+1. `SPIRITED_ENV_HOME`
+2. `XDG_CONFIG_HOME/spirited-env/environs`
+3. `~/.config/spirited-env/environs`
+
 ## Commands
 
 ```bash
