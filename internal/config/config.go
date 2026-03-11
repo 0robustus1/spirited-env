@@ -31,9 +31,10 @@ type Paths struct {
 }
 
 type Settings struct {
-	MergeStrategy MergeStrategy
-	DirectoryMode os.FileMode
-	FileMode      os.FileMode
+	MergeStrategy         MergeStrategy
+	DirectoryMode         os.FileMode
+	FileMode              os.FileMode
+	RestoreOriginalValues bool
 }
 
 func ResolvePaths() (Paths, error) {
@@ -76,9 +77,10 @@ func resolveBaseConfigDir() (string, error) {
 
 func DefaultSettings() Settings {
 	return Settings{
-		MergeStrategy: MergeLayered,
-		DirectoryMode: 0o700,
-		FileMode:      0o600,
+		MergeStrategy:         MergeLayered,
+		DirectoryMode:         0o700,
+		FileMode:              0o600,
+		RestoreOriginalValues: true,
 	}
 }
 
@@ -94,9 +96,10 @@ func LoadSettings(configFile string) (Settings, error) {
 	}
 
 	var raw struct {
-		MergeStrategy string `yaml:"merge_strategy"`
-		DirectoryMode string `yaml:"directory_mode"`
-		FileMode      string `yaml:"file_mode"`
+		MergeStrategy         string `yaml:"merge_strategy"`
+		DirectoryMode         string `yaml:"directory_mode"`
+		FileMode              string `yaml:"file_mode"`
+		RestoreOriginalValues *bool  `yaml:"restore_original_values"`
 	}
 
 	if err := yaml.Unmarshal(content, &raw); err != nil {
@@ -127,6 +130,10 @@ func LoadSettings(configFile string) (Settings, error) {
 			return Settings{}, fmt.Errorf("invalid file_mode: %w", err)
 		}
 		settings.FileMode = mode
+	}
+
+	if raw.RestoreOriginalValues != nil {
+		settings.RestoreOriginalValues = *raw.RestoreOriginalValues
 	}
 
 	return settings, nil

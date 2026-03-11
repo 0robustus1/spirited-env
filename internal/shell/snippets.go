@@ -24,7 +24,7 @@ spirited_env_hook() {
   SPIRITED_ENV_LAST_PWD="$current"
 
   local output
-  output="$(spirited-env load --shell bash 2>/dev/null)" || return
+  output="$(spirited-env load --shell bash)" || return
   eval "$output"
 }
 
@@ -42,7 +42,7 @@ spirited_env_hook() {
   SPIRITED_ENV_LAST_PWD="$current"
 
   local output
-  output="$(spirited-env load --shell zsh 2>/dev/null)" || return
+  output="$(spirited-env load --shell zsh)" || return
   eval "$output"
 }
 
@@ -53,7 +53,7 @@ add-zsh-hook precmd spirited_env_hook
 
 const fishSnippet = `# spirited-env (fish)
 function spirited_env_hook --on-variable PWD
-  set -l output (spirited-env load --shell fish 2>/dev/null)
+  set -l output (spirited-env load --shell fish)
   if test $status -ne 0
     return
   end

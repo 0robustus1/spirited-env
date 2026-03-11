@@ -34,6 +34,7 @@ Environs storage precedence:
 merge_strategy: layered
 directory_mode: "0700"
 file_mode: "0600"
+restore_original_values: true
 ```
 
 Options:
@@ -41,6 +42,7 @@ Options:
 - `merge_strategy`: `layered` (default) or `nearest`.
 - `directory_mode`: octal permission string for created mapping directories.
 - `file_mode`: octal permission string for created/enforced `.env` files.
+- `restore_original_values`: `true` (default) restores pre-existing shell values when a key stops being managed.
 
 When `config.yaml` is missing, defaults are used (`layered`, `0700`, `0600`).
 
@@ -59,6 +61,8 @@ spirited-env load [dir] --shell bash|zsh|fish
 spirited-env status [dir]
 spirited-env move <old-dir> <new-dir> [--force]
 spirited-env config show
+spirited-env state show
+spirited-env state reset --shell bash|zsh|fish
 spirited-env init bash|zsh|fish
 spirited-env doctor
 spirited-env version

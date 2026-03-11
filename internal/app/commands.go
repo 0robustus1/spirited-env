@@ -92,22 +92,21 @@ func (c *LoadCmd) Run(rt *Runtime) error {
 	}
 
 	managed := loader.ParseManagedKeys(os.Getenv(loader.ManagedKeysEnv))
+	originals, originalsErr := loader.ParseOriginals(os.Getenv(loader.OriginalsEnv))
+	if originalsErr != nil {
+		fmt.Fprintf(os.Stderr, "spirited-env: warning: invalid %s (%v); refusing to modify environment\n", loader.OriginalsEnv, originalsErr)
+		fmt.Fprintf(os.Stderr, "spirited-env: warning: recover with eval \"$(spirited-env state reset --shell %s)\"\n", c.Shell)
+		return nil
+	}
+
+	current := currentEnvMap()
 	vars, _, err := resolveVariables(c.Dir, rt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "spirited-env: %v\n", err)
 		return nil
 	}
 
-	if len(vars) == 0 {
-		emitted, emitErr := loader.Emit(loader.Shell(c.Shell), managed, map[string]string{})
-		if emitErr != nil {
-			return emitErr
-		}
-		fmt.Print(emitted)
-		return nil
-	}
-
-	emitted, emitErr := loader.Emit(loader.Shell(c.Shell), managed, vars)
+	emitted, emitErr := loader.Emit(loader.Shell(c.Shell), managed, vars, originals, current, rt.Settings.RestoreOriginalValues)
 	if emitErr != nil {
 		return emitErr
 	}
@@ -241,13 +240,15 @@ func (c *ConfigShowCmd) Run(rt *Runtime) error {
 	}
 
 	output := struct {
-		MergeStrategy string `yaml:"merge_strategy"`
-		DirectoryMode string `yaml:"directory_mode"`
-		FileMode      string `yaml:"file_mode"`
+		MergeStrategy        string `yaml:"merge_strategy"`
+		DirectoryMode        string `yaml:"directory_mode"`
+		FileMode             string `yaml:"file_mode"`
+		RestoreOriginalValue bool   `yaml:"restore_original_values"`
 	}{
-		MergeStrategy: string(settings.MergeStrategy),
-		DirectoryMode: fmt.Sprintf("%04o", settings.DirectoryMode),
-		FileMode:      fmt.Sprintf("%04o", settings.FileMode),
+		MergeStrategy:        string(settings.MergeStrategy),
+		DirectoryMode:        fmt.Sprintf("%04o", settings.DirectoryMode),
+		FileMode:             fmt.Sprintf("%04o", settings.FileMode),
+		RestoreOriginalValue: settings.RestoreOriginalValues,
 	}
 
 	content, err := yaml.Marshal(output)
@@ -278,7 +279,7 @@ func (c *DoctorCmd) Run(rt *Runtime) error {
 		fmt.Printf("config: error (%v)\n", rt.ConfigErr)
 		return nil
 	}
-	fmt.Printf("config: ok (strategy=%s directory_mode=%04o file_mode=%04o)\n", rt.Settings.MergeStrategy, rt.Settings.DirectoryMode, rt.Settings.FileMode)
+	fmt.Printf("config: ok (strategy=%s directory_mode=%04o file_mode=%04o restore_original_values=%t)\n", rt.Settings.MergeStrategy, rt.Settings.DirectoryMode, rt.Settings.FileMode, rt.Settings.RestoreOriginalValues)
 
 	if err := os.MkdirAll(rt.Mapper.Root, rt.Settings.DirectoryMode); err != nil {
 		return fmt.Errorf("ensure store root exists: %w", err)
@@ -401,4 +402,58 @@ func resolveVariables(dir string, rt *Runtime) (map[string]string, []string, err
 	}
 
 	return merged, files, nil
+}
+
+type StateCmd struct {
+	Reset StateResetCmd `cmd:"" help:"Print shell commands to reset internal state variables."`
+	Show  StateShowCmd  `cmd:"" help:"Print current internal state."`
+}
+
+type StateResetCmd struct {
+	Shell string `required:"" enum:"bash,zsh,fish" help:"Shell syntax to emit."`
+}
+
+func (c *StateResetCmd) Run(*Runtime) error {
+	emitted, err := loader.EmitReset(loader.Shell(c.Shell))
+	if err != nil {
+		return err
+	}
+	fmt.Print(emitted)
+	return nil
+}
+
+type StateShowCmd struct{}
+
+func (c *StateShowCmd) Run(*Runtime) error {
+	originals, err := loader.ParseOriginals(os.Getenv(loader.OriginalsEnv))
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", loader.OriginalsEnv, err)
+	}
+
+	output := struct {
+		ManagedKeys string           `yaml:"managed_keys"`
+		Originals   loader.Originals `yaml:"originals"`
+	}{
+		ManagedKeys: os.Getenv(loader.ManagedKeysEnv),
+		Originals:   originals,
+	}
+
+	content, err := yaml.Marshal(output)
+	if err != nil {
+		return fmt.Errorf("marshal state: %w", err)
+	}
+	fmt.Print(string(content))
+	return nil
+}
+
+func currentEnvMap() map[string]string {
+	env := map[string]string{}
+	for _, item := range os.Environ() {
+		eq := strings.IndexByte(item, '=')
+		if eq <= 0 {
+			continue
+		}
+		env[item[:eq]] = item[eq+1:]
+	}
+	return env
 }

@@ -15,6 +15,7 @@ type CLI struct {
 	Status  app.StatusCmd  `cmd:"" help:"Show discovered env file and key info."`
 	Move    app.MoveCmd    `cmd:"" help:"Move mapped env file to a new directory mapping."`
 	Config  app.ConfigCmd  `cmd:"" help:"Show effective configuration."`
+	State   app.StateCmd   `cmd:"" help:"Inspect or reset internal shell state."`
 	Init    app.InitCmd    `cmd:"" help:"Print shell integration snippet."`
 	Doctor  app.DoctorCmd  `cmd:"" help:"Run health checks for spirited-env setup."`
 	Version app.VersionCmd `cmd:"" help:"Print version information."`

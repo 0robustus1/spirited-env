@@ -75,11 +75,14 @@ func TestLoadSettingsDefaultsWhenMissing(t *testing.T) {
 	if settings.FileMode != 0o600 {
 		t.Fatalf("FileMode = %04o", settings.FileMode)
 	}
+	if !settings.RestoreOriginalValues {
+		t.Fatalf("RestoreOriginalValues = %t, want true", settings.RestoreOriginalValues)
+	}
 }
 
 func TestLoadSettingsReadsValues(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "config.yaml")
-	content := []byte("merge_strategy: nearest\ndirectory_mode: \"0750\"\nfile_mode: \"0640\"\n")
+	content := []byte("merge_strategy: nearest\ndirectory_mode: \"0750\"\nfile_mode: \"0640\"\nrestore_original_values: false\n")
 	if err := os.WriteFile(file, content, 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -97,6 +100,9 @@ func TestLoadSettingsReadsValues(t *testing.T) {
 	}
 	if settings.FileMode != 0o640 {
 		t.Fatalf("FileMode = %04o", settings.FileMode)
+	}
+	if settings.RestoreOriginalValues {
+		t.Fatalf("RestoreOriginalValues = %t, want false", settings.RestoreOriginalValues)
 	}
 }
 
