@@ -7,40 +7,20 @@ import (
 	"strings"
 )
 
-const HomeOverrideEnv = "SPIRITED_ENV_HOME"
-const XDGConfigHomeEnv = "XDG_CONFIG_HOME"
-
 type Mapper struct {
 	Root string
 }
 
 func New(root string) (Mapper, error) {
 	if root == "" {
-		resolved, err := defaultRoot()
+		home, err := os.UserHomeDir()
 		if err != nil {
 			return Mapper{}, err
 		}
-		root = resolved
+		root = filepath.Join(home, ".config", "spirited-env", "environs")
 	}
 
 	return Mapper{Root: root}, nil
-}
-
-func defaultRoot() (string, error) {
-	if custom := os.Getenv(HomeOverrideEnv); custom != "" {
-		return filepath.Clean(custom), nil
-	}
-
-	if xdg := strings.TrimSpace(os.Getenv(XDGConfigHomeEnv)); xdg != "" {
-		return filepath.Join(filepath.Clean(xdg), "spirited-env", "environs"), nil
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home dir: %w", err)
-	}
-
-	return filepath.Join(home, ".config", "spirited-env", "environs"), nil
 }
 
 func CanonicalizeDir(dir string) (string, error) {

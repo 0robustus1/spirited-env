@@ -13,14 +13,36 @@ go install github.com/0robustus1/spirited-env/cmd/spirited-env@latest
 - Project paths are canonicalized (`Abs + Clean + EvalSymlinks`).
 - Canonical path `/Users/tim/work/app` maps to:
   - `~/.config/spirited-env/environs/Users/tim/work/app/.env`
-- Mapping directories are created with mode `0700`.
-- `.env` files are created/enforced with mode `0600`.
+- Default behavior is layered merge (parent directories first, current directory overrides).
 
-Config root precedence:
+Config path precedence:
+
+1. `SPIRITED_ENV_CONFIG_HOME`
+2. `XDG_CONFIG_HOME/spirited-env`
+3. `~/.config/spirited-env`
+
+Environs storage precedence:
 
 1. `SPIRITED_ENV_HOME`
-2. `XDG_CONFIG_HOME/spirited-env/environs`
-3. `~/.config/spirited-env/environs`
+2. `<config-base>/environs`
+
+## Config File
+
+`spirited-env` reads optional configuration from `<config-base>/config.yaml`.
+
+```yaml
+merge_strategy: layered
+directory_mode: "0700"
+file_mode: "0600"
+```
+
+Options:
+
+- `merge_strategy`: `layered` (default) or `nearest`.
+- `directory_mode`: octal permission string for created mapping directories.
+- `file_mode`: octal permission string for created/enforced `.env` files.
+
+When `config.yaml` is missing, defaults are used (`layered`, `0700`, `0600`).
 
 ## Commands
 

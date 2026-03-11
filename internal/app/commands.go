@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/0robustus1/spirited-env/internal/config"
 	"github.com/0robustus1/spirited-env/internal/discovery"
 	"github.com/0robustus1/spirited-env/internal/dotenv"
 	"github.com/0robustus1/spirited-env/internal/loader"
@@ -36,24 +37,28 @@ type EditCmd struct {
 }
 
 func (c *EditCmd) Run(rt *Runtime) error {
+	if rt.ConfigErr != nil {
+		return fmt.Errorf("load config: %w", rt.ConfigErr)
+	}
+
 	envPath, err := rt.Mapper.EnvFileForDir(c.Dir)
 	if err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(envPath), dirMode); err != nil {
+	if err := os.MkdirAll(filepath.Dir(envPath), rt.Settings.DirectoryMode); err != nil {
 		return fmt.Errorf("create mapping directory: %w", err)
 	}
 
 	if _, statErr := os.Stat(envPath); errors.Is(statErr, os.ErrNotExist) {
-		file, createErr := os.OpenFile(envPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, fileMode)
+		file, createErr := os.OpenFile(envPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, rt.Settings.FileMode)
 		if createErr != nil {
 			return fmt.Errorf("create env file: %w", createErr)
 		}
 		_ = file.Close()
 	}
 
-	if chmodErr := os.Chmod(envPath, fileMode); chmodErr != nil {
+	if chmodErr := os.Chmod(envPath, rt.Settings.FileMode); chmodErr != nil {
 		return fmt.Errorf("enforce permissions on %s: %w", envPath, chmodErr)
 	}
 
@@ -80,25 +85,24 @@ type LoadCmd struct {
 }
 
 func (c *LoadCmd) Run(rt *Runtime) error {
-	managed := loader.ParseManagedKeys(os.Getenv(loader.ManagedKeysEnv))
-
-	envFile, found, err := discovery.FindNearestEnvFile(c.Dir, rt.Mapper)
-	if err != nil {
-		return err
+	if rt.ConfigErr != nil {
+		fmt.Fprintf(os.Stderr, "spirited-env: config error: %v\n", rt.ConfigErr)
+		return nil
 	}
 
-	if !found {
+	managed := loader.ParseManagedKeys(os.Getenv(loader.ManagedKeysEnv))
+	vars, _, err := resolveVariables(c.Dir, rt)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "spirited-env: %v\n", err)
+		return nil
+	}
+
+	if len(vars) == 0 {
 		emitted, emitErr := loader.Emit(loader.Shell(c.Shell), managed, map[string]string{})
 		if emitErr != nil {
 			return emitErr
 		}
 		fmt.Print(emitted)
-		return nil
-	}
-
-	vars, parseErr := parseEnvFile(envFile)
-	if parseErr != nil {
-		fmt.Fprintf(os.Stderr, "spirited-env: parse error in %s: %v\n", envFile, parseErr)
 		return nil
 	}
 
@@ -116,28 +120,38 @@ type StatusCmd struct {
 }
 
 func (c *StatusCmd) Run(rt *Runtime) error {
+	if rt.ConfigErr != nil {
+		return fmt.Errorf("load config: %w", rt.ConfigErr)
+	}
+
 	canonical, err := pathmap.CanonicalizeDir(c.Dir)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("directory: %s\n", canonical)
+	fmt.Printf("strategy: %s\n", rt.Settings.MergeStrategy)
+	fmt.Printf("mode: directory=%04o file=%04o\n", rt.Settings.DirectoryMode, rt.Settings.FileMode)
 
-	envFile, found, err := discovery.FindNearestEnvFile(c.Dir, rt.Mapper)
+	files, err := resolvedEnvFiles(c.Dir, rt)
 	if err != nil {
 		return err
 	}
 
-	if !found {
+	if len(files) == 0 {
 		fmt.Println("status: no environment file found in ancestor mappings")
 		return nil
 	}
 
-	fmt.Printf("env file: %s\n", envFile)
+	if rt.Settings.MergeStrategy == config.MergeNearest {
+		fmt.Printf("env file: %s\n", files[0])
+	} else {
+		fmt.Printf("env files (%d): %s\n", len(files), strings.Join(files, ", "))
+	}
 
-	vars, parseErr := parseEnvFile(envFile)
-	if parseErr != nil {
-		fmt.Printf("parse: error (%v)\n", parseErr)
+	vars, _, resolveErr := resolveVariables(c.Dir, rt)
+	if resolveErr != nil {
+		fmt.Printf("parse: error (%v)\n", resolveErr)
 		return nil
 	}
 
@@ -162,6 +176,10 @@ type MoveCmd struct {
 }
 
 func (c *MoveCmd) Run(rt *Runtime) error {
+	if rt.ConfigErr != nil {
+		return fmt.Errorf("load config: %w", rt.ConfigErr)
+	}
+
 	source, err := rt.Mapper.EnvFileForDir(c.OldDir)
 	if err != nil {
 		return err
@@ -187,15 +205,15 @@ func (c *MoveCmd) Run(rt *Runtime) error {
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(destination), dirMode); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destination), rt.Settings.DirectoryMode); err != nil {
 		return fmt.Errorf("create destination directory: %w", err)
 	}
 
-	if err := moveFile(source, destination); err != nil {
+	if err := moveFile(source, destination, rt.Settings.FileMode); err != nil {
 		return err
 	}
 
-	if err := os.Chmod(destination, fileMode); err != nil {
+	if err := os.Chmod(destination, rt.Settings.FileMode); err != nil {
 		return fmt.Errorf("enforce destination mode: %w", err)
 	}
 
@@ -219,8 +237,16 @@ func (c *InitCmd) Run(*Runtime) error {
 type DoctorCmd struct{}
 
 func (c *DoctorCmd) Run(rt *Runtime) error {
+	fmt.Printf("config file: %s\n", rt.Paths.ConfigFile)
+	fmt.Printf("config base: %s\n", rt.Paths.BaseConfigDir)
 	fmt.Printf("store root: %s\n", rt.Mapper.Root)
-	if err := os.MkdirAll(rt.Mapper.Root, dirMode); err != nil {
+	if rt.ConfigErr != nil {
+		fmt.Printf("config: error (%v)\n", rt.ConfigErr)
+		return nil
+	}
+	fmt.Printf("config: ok (strategy=%s directory_mode=%04o file_mode=%04o)\n", rt.Settings.MergeStrategy, rt.Settings.DirectoryMode, rt.Settings.FileMode)
+
+	if err := os.MkdirAll(rt.Mapper.Root, rt.Settings.DirectoryMode); err != nil {
 		return fmt.Errorf("ensure store root exists: %w", err)
 	}
 
@@ -230,17 +256,21 @@ func (c *DoctorCmd) Run(rt *Runtime) error {
 	}
 
 	fmt.Printf("store root mode: %04o\n", info.Mode().Perm())
-	if info.Mode().Perm() != dirMode {
-		fmt.Printf("warning: expected mode %04o\n", dirMode)
+	if info.Mode().Perm() != rt.Settings.DirectoryMode {
+		fmt.Printf("warning: expected mode %04o\n", rt.Settings.DirectoryMode)
 	}
 
-	if envFile, found, findErr := discovery.FindNearestEnvFile("", rt.Mapper); findErr != nil {
+	if files, findErr := resolvedEnvFiles("", rt); findErr != nil {
 		fmt.Printf("lookup: error (%v)\n", findErr)
-	} else if !found {
+	} else if len(files) == 0 {
 		fmt.Println("lookup: no active mapping for current directory")
 	} else {
-		fmt.Printf("lookup: active env file %s\n", envFile)
-		if _, parseErr := parseEnvFile(envFile); parseErr != nil {
+		if rt.Settings.MergeStrategy == config.MergeNearest {
+			fmt.Printf("lookup: active env file %s\n", files[0])
+		} else {
+			fmt.Printf("lookup: active env files (%d) %s\n", len(files), strings.Join(files, ", "))
+		}
+		if _, _, parseErr := resolveVariables("", rt); parseErr != nil {
 			fmt.Printf("parse: error (%v)\n", parseErr)
 		} else {
 			fmt.Println("parse: ok")
@@ -273,7 +303,7 @@ func parseEnvFile(path string) (map[string]string, error) {
 	return values, nil
 }
 
-func moveFile(source, destination string) error {
+func moveFile(source, destination string, fileMode os.FileMode) error {
 	if err := os.Rename(source, destination); err == nil {
 		return nil
 	}
@@ -299,4 +329,42 @@ func moveFile(source, destination string) error {
 	}
 
 	return nil
+}
+
+func resolvedEnvFiles(dir string, rt *Runtime) ([]string, error) {
+	if rt.Settings.MergeStrategy == config.MergeNearest {
+		envFile, found, err := discovery.FindNearestEnvFile(dir, rt.Mapper)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, nil
+		}
+		return []string{envFile}, nil
+	}
+
+	return discovery.FindLayeredEnvFiles(dir, rt.Mapper)
+}
+
+func resolveVariables(dir string, rt *Runtime) (map[string]string, []string, error) {
+	files, err := resolvedEnvFiles(dir, rt)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(files) == 0 {
+		return map[string]string{}, nil, nil
+	}
+
+	merged := map[string]string{}
+	for _, file := range files {
+		vars, parseErr := parseEnvFile(file)
+		if parseErr != nil {
+			return nil, files, fmt.Errorf("parse error in %s: %w", file, parseErr)
+		}
+		for k, v := range vars {
+			merged[k] = v
+		}
+	}
+
+	return merged, files, nil
 }
