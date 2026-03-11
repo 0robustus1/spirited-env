@@ -14,6 +14,7 @@ type CLI struct {
 	Load    app.LoadCmd    `cmd:"" help:"Emit shell commands for loading env."`
 	Status  app.StatusCmd  `cmd:"" help:"Show discovered env file and key info."`
 	Move    app.MoveCmd    `cmd:"" help:"Move mapped env file to a new directory mapping."`
+	Config  app.ConfigCmd  `cmd:"" help:"Show effective configuration."`
 	Init    app.InitCmd    `cmd:"" help:"Print shell integration snippet."`
 	Doctor  app.DoctorCmd  `cmd:"" help:"Run health checks for spirited-env setup."`
 	Version app.VersionCmd `cmd:"" help:"Print version information."`

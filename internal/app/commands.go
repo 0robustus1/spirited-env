@@ -17,6 +17,7 @@ import (
 	"github.com/0robustus1/spirited-env/internal/pathmap"
 	"github.com/0robustus1/spirited-env/internal/shell"
 	"github.com/0robustus1/spirited-env/internal/version"
+	"gopkg.in/yaml.v3"
 )
 
 type PathCmd struct {
@@ -223,6 +224,39 @@ func (c *MoveCmd) Run(rt *Runtime) error {
 
 type InitCmd struct {
 	Shell string `arg:"" enum:"bash,zsh,fish" help:"Shell to print integration snippet for."`
+}
+
+type ConfigCmd struct {
+	Show ConfigShowCmd `cmd:"" help:"Print effective configuration as YAML."`
+}
+
+type ConfigShowCmd struct{}
+
+func (c *ConfigShowCmd) Run(rt *Runtime) error {
+	settings := rt.Settings
+	if rt.ConfigErr != nil {
+		settings = config.DefaultSettings()
+		fmt.Fprintf(os.Stderr, "spirited-env: config error in %s: %v\n", rt.Paths.ConfigFile, rt.ConfigErr)
+		fmt.Fprintln(os.Stderr, "spirited-env: printing default config values")
+	}
+
+	output := struct {
+		MergeStrategy string `yaml:"merge_strategy"`
+		DirectoryMode string `yaml:"directory_mode"`
+		FileMode      string `yaml:"file_mode"`
+	}{
+		MergeStrategy: string(settings.MergeStrategy),
+		DirectoryMode: fmt.Sprintf("%04o", settings.DirectoryMode),
+		FileMode:      fmt.Sprintf("%04o", settings.FileMode),
+	}
+
+	content, err := yaml.Marshal(output)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	fmt.Print(string(content))
+	return nil
 }
 
 func (c *InitCmd) Run(*Runtime) error {

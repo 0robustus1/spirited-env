@@ -44,6 +44,12 @@ Options:
 
 When `config.yaml` is missing, defaults are used (`layered`, `0700`, `0600`).
 
+To print the effective configuration as valid YAML (useful as a bootstrap file):
+
+```bash
+spirited-env config show
+```
+
 ## Commands
 
 ```bash
@@ -52,6 +58,7 @@ spirited-env edit [dir]
 spirited-env load [dir] --shell bash|zsh|fish
 spirited-env status [dir]
 spirited-env move <old-dir> <new-dir> [--force]
+spirited-env config show
 spirited-env init bash|zsh|fish
 spirited-env doctor
 spirited-env version
