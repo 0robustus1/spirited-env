@@ -70,6 +70,8 @@ spirited-env config show
 spirited-env state show
 spirited-env state reset --shell bash|zsh|fish
 spirited-env init bash|zsh|fish
+spirited-env completion fish
+spirited-env completion install fish
 spirited-env doctor
 spirited-env version
 ```
@@ -109,6 +111,33 @@ eval (spirited-env init fish)
 ```
 
 `spirited-env init fish | source` is the preferred form.
+
+## Fish Completions
+
+Generate completion script:
+
+```fish
+spirited-env completion fish
+```
+
+Install completion script into fish's user completion path:
+
+```fish
+spirited-env completion install fish
+```
+
+Manual install (equivalent):
+
+```fish
+mkdir -p ~/.config/fish/completions
+spirited-env completion fish > ~/.config/fish/completions/spirited-env.fish
+```
+
+To activate immediately in the current shell:
+
+```fish
+source ~/.config/fish/completions/spirited-env.fish
+```
 
 ## Parser Behavior
 

@@ -248,6 +248,17 @@ type InitCmd struct {
 	Shell string `arg:"" enum:"bash,zsh,fish" help:"Shell to print integration snippet for."`
 }
 
+type CompletionCmd struct {
+	Fish    CompletionFishCmd    `cmd:"" help:"Print fish completion script."`
+	Install CompletionInstallCmd `cmd:"" help:"Install shell completion script."`
+}
+
+type CompletionFishCmd struct{}
+
+type CompletionInstallCmd struct {
+	Shell string `arg:"" enum:"fish" help:"Shell completion to install."`
+}
+
 type ConfigCmd struct {
 	Show ConfigShowCmd `cmd:"" help:"Print effective configuration as YAML."`
 }
@@ -289,6 +300,37 @@ func (c *InitCmd) Run(*Runtime) error {
 		return err
 	}
 	fmt.Print(snippet)
+	return nil
+}
+
+func (c *CompletionFishCmd) Run(*Runtime) error {
+	completion, err := shell.Completion("fish")
+	if err != nil {
+		return err
+	}
+	fmt.Print(completion)
+	return nil
+}
+
+func (c *CompletionInstallCmd) Run(*Runtime) error {
+	completion, err := shell.Completion(c.Shell)
+	if err != nil {
+		return err
+	}
+
+	installPath, err := completionInstallPath(c.Shell)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(installPath), 0o755); err != nil {
+		return fmt.Errorf("create completion directory: %w", err)
+	}
+	if err := os.WriteFile(installPath, []byte(completion), 0o644); err != nil {
+		return fmt.Errorf("write completion file %s: %w", installPath, err)
+	}
+
+	fmt.Printf("installed %s completion to %s\n", c.Shell, installPath)
 	return nil
 }
 
@@ -479,6 +521,28 @@ func currentEnvMap() map[string]string {
 		env[item[:eq]] = item[eq+1:]
 	}
 	return env
+}
+
+func completionInstallPath(shellName string) (string, error) {
+	switch shellName {
+	case "fish":
+		configDir := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+		if configDir == "" {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return "", fmt.Errorf("resolve user home directory: %w", err)
+			}
+			configDir = filepath.Join(homeDir, ".config")
+		}
+
+		configDir, err := filepath.Abs(configDir)
+		if err != nil {
+			return "", fmt.Errorf("resolve completion directory: %w", err)
+		}
+		return filepath.Join(configDir, "fish", "completions", "spirited-env.fish"), nil
+	default:
+		return "", fmt.Errorf("unsupported shell %q", shellName)
+	}
 }
 
 func runImportOrMigrate(rt *Runtime, dirArg, fromArg string, replace bool, migrate bool) error {
