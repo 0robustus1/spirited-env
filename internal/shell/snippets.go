@@ -16,7 +16,7 @@ func Snippet(name string) (string, error) {
 }
 
 const bashSnippet = `# spirited-env (bash)
-spirited_env_hook() {
+__spirited_env_hook() {
   local current="$PWD"
   if [ "$current" = "$SPIRITED_ENV_LAST_PWD" ]; then
     return
@@ -28,13 +28,13 @@ spirited_env_hook() {
   eval "$output"
 }
 
-if [[ ";${PROMPT_COMMAND};" != *";spirited_env_hook;"* ]]; then
-  PROMPT_COMMAND="spirited_env_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+if [[ ";${PROMPT_COMMAND};" != *";__spirited_env_hook;"* ]]; then
+  PROMPT_COMMAND="__spirited_env_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 fi
 `
 
 const zshSnippet = `# spirited-env (zsh)
-spirited_env_hook() {
+__spirited_env_hook() {
   local current="$PWD"
   if [[ "$current" == "$SPIRITED_ENV_LAST_PWD" ]]; then
     return
@@ -47,11 +47,11 @@ spirited_env_hook() {
 }
 
 autoload -U add-zsh-hook
-add-zsh-hook chpwd spirited_env_hook
-add-zsh-hook precmd spirited_env_hook
+add-zsh-hook chpwd __spirited_env_hook
+add-zsh-hook precmd __spirited_env_hook
 `
 
-const fishSnippet = `function spirited_env_hook --on-variable PWD;
+const fishSnippet = `function __spirited_env_hook --on-variable PWD;
   set -l output (spirited-env load --shell fish);
   if test $status -ne 0;
     return;

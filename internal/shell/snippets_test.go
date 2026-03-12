@@ -15,7 +15,7 @@ func TestFishSnippetIsEvalSafe(t *testing.T) {
 	if strings.HasPrefix(strings.TrimSpace(snippet), "#") {
 		t.Fatalf("fish snippet must not start with a comment: %q", snippet)
 	}
-	if !strings.Contains(snippet, "function spirited_env_hook --on-variable PWD;") {
+	if !strings.Contains(snippet, "function __spirited_env_hook --on-variable PWD;") {
 		t.Fatalf("missing function declaration: %s", snippet)
 	}
 	if !strings.Contains(snippet, "eval (string join \\n -- $output);") {
@@ -26,7 +26,7 @@ func TestFishSnippetIsEvalSafe(t *testing.T) {
 		t.Skip("fish not available in PATH")
 	}
 
-	cmd := exec.Command("fish", "-c", "set -l output (cat); eval $output; functions -q spirited_env_hook; and echo defined; or echo missing")
+	cmd := exec.Command("fish", "-c", "set -l output (cat); eval $output; functions -q __spirited_env_hook; and echo defined; or echo missing")
 	cmd.Stdin = strings.NewReader(snippet)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -47,7 +47,7 @@ func TestFishSnippetCanBeSourced(t *testing.T) {
 		t.Fatalf("Snippet() error = %v", err)
 	}
 
-	cmd := exec.Command("fish", "-c", "source; functions -q spirited_env_hook; and echo defined; or echo missing")
+	cmd := exec.Command("fish", "-c", "source; functions -q __spirited_env_hook; and echo defined; or echo missing")
 	cmd.Stdin = strings.NewReader(snippet)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -75,7 +75,7 @@ func TestBashSnippetIsEvalSafe(t *testing.T) {
 		t.Fatalf("missing quoted eval for bash output: %s", snippet)
 	}
 
-	cmd := exec.Command("bash", "-lc", "eval \"$1\"; type spirited_env_hook >/dev/null 2>&1 && echo defined || echo missing", "_", snippet)
+	cmd := exec.Command("bash", "-lc", "eval \"$1\"; type __spirited_env_hook >/dev/null 2>&1 && echo defined || echo missing", "_", snippet)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("bash eval test failed: %v, output=%s", err, out)
@@ -102,7 +102,7 @@ func TestZshSnippetIsEvalSafe(t *testing.T) {
 		t.Fatalf("missing quoted eval for zsh output: %s", snippet)
 	}
 
-	cmd := exec.Command("zsh", "-c", "eval \"$1\"; typeset -f spirited_env_hook >/dev/null 2>&1 && echo defined || echo missing", "_", snippet)
+	cmd := exec.Command("zsh", "-c", "eval \"$1\"; typeset -f __spirited_env_hook >/dev/null 2>&1 && echo defined || echo missing", "_", snippet)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("zsh eval test failed: %v, output=%s", err, out)
