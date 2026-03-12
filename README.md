@@ -101,6 +101,15 @@ spirited-env init zsh
 spirited-env init fish
 ```
 
+For fish, both of the following are supported:
+
+```fish
+spirited-env init fish | source
+eval (spirited-env init fish)
+```
+
+`spirited-env init fish | source` is the preferred form.
+
 ## Parser Behavior
 
 Supported dotenv subset:

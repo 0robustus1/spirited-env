@@ -228,7 +228,7 @@ func emitFish(toUnset []string, toRestore map[string]string, values map[string]s
 	for _, key := range toUnset {
 		b.WriteString("set -e ")
 		b.WriteString(key)
-		b.WriteString("\n")
+		b.WriteString(";\n")
 	}
 
 	restoreKeys := sortedKeys(toRestore)
@@ -237,7 +237,7 @@ func emitFish(toUnset []string, toRestore map[string]string, values map[string]s
 		b.WriteString(key)
 		b.WriteString(" ")
 		b.WriteString(fishQuote(toRestore[key]))
-		b.WriteString("\n")
+		b.WriteString(";\n")
 	}
 
 	for _, key := range orderedKeys {
@@ -245,19 +245,19 @@ func emitFish(toUnset []string, toRestore map[string]string, values map[string]s
 		b.WriteString(key)
 		b.WriteString(" ")
 		b.WriteString(fishQuote(values[key]))
-		b.WriteString("\n")
+		b.WriteString(";\n")
 	}
 
 	b.WriteString("set -gx ")
 	b.WriteString(ManagedKeysEnv)
 	b.WriteString(" ")
 	b.WriteString(fishQuote(managed))
-	b.WriteString("\n")
+	b.WriteString(";\n")
 	b.WriteString("set -gx ")
 	b.WriteString(OriginalsEnv)
 	b.WriteString(" ")
 	b.WriteString(fishQuote(encodedOriginals))
-	b.WriteString("\n")
+	b.WriteString(";\n")
 
 	return b.String()
 }

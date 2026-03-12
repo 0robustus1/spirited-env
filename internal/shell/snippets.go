@@ -51,12 +51,11 @@ add-zsh-hook chpwd spirited_env_hook
 add-zsh-hook precmd spirited_env_hook
 `
 
-const fishSnippet = `# spirited-env (fish)
-function spirited_env_hook --on-variable PWD
-  set -l output (spirited-env load --shell fish)
-  if test $status -ne 0
-    return
-  end
-  eval $output
+const fishSnippet = `function spirited_env_hook --on-variable PWD;
+  set -l output (spirited-env load --shell fish);
+  if test $status -ne 0;
+    return;
+  end;
+  eval (string join \n -- $output);
 end
 `
