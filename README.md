@@ -39,6 +39,7 @@ merge_strategy: layered
 directory_mode: "0700"
 file_mode: "0600"
 restore_original_values: true
+report_env_changes: true
 ```
 
 Options:
@@ -47,8 +48,11 @@ Options:
 - `directory_mode`: octal permission string for created mapping directories.
 - `file_mode`: octal permission string for created/enforced `.env` files.
 - `restore_original_values`: `true` (default) restores pre-existing shell values when a key stops being managed.
+- `report_env_changes`: `true` (default) reports loaded/unloaded variable names on directory-triggered interactive loads.
 
-When `config.yaml` is missing, defaults are used (`layered`, `0700`, `0600`).
+When `config.yaml` is missing, defaults are used (`layered`, `0700`, `0600`, `restore_original_values: true`, `report_env_changes: true`).
+
+Change reports are emitted only for interactive shell hooks and are written to stderr, so shell-eval output on stdout remains clean for scripting.
 
 To print the effective configuration as valid YAML (useful as a bootstrap file):
 

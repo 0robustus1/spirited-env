@@ -84,8 +84,9 @@ func (c *EditCmd) Run(rt *Runtime) error {
 }
 
 type LoadCmd struct {
-	Dir   string `arg:"" optional:"" help:"Directory to load for (default: current directory)." type:"path"`
-	Shell string `required:"" enum:"bash,zsh,fish" help:"Shell syntax to emit."`
+	Dir         string `arg:"" optional:"" help:"Directory to load for (default: current directory)." type:"path"`
+	Shell       string `required:"" enum:"bash,zsh,fish" help:"Shell syntax to emit."`
+	Interactive bool   `hidden:"" help:"Enable interactive-only reporting output."`
 }
 
 func (c *LoadCmd) Run(rt *Runtime) error {
@@ -112,6 +113,16 @@ func (c *LoadCmd) Run(rt *Runtime) error {
 	emitted, emitErr := loader.Emit(loader.Shell(c.Shell), managed, vars, originals, current, rt.Settings.RestoreOriginalValues)
 	if emitErr != nil {
 		return emitErr
+	}
+
+	if rt.Settings.ReportEnvChanges && c.Interactive {
+		summary := summarizeEnvChange(managed, vars, current)
+		if summary.Changed {
+			fmt.Fprintf(os.Stderr, "spirited-env: loaded variables: %s\n", formatKeyList(summary.Loaded))
+			if len(summary.Unloaded) > 0 {
+				fmt.Fprintf(os.Stderr, "spirited-env: unloaded variables: %s\n", formatKeyList(summary.Unloaded))
+			}
+		}
 	}
 
 	fmt.Print(emitted)
@@ -278,11 +289,13 @@ func (c *ConfigShowCmd) Run(rt *Runtime) error {
 		DirectoryMode        string `yaml:"directory_mode"`
 		FileMode             string `yaml:"file_mode"`
 		RestoreOriginalValue bool   `yaml:"restore_original_values"`
+		ReportEnvChanges     bool   `yaml:"report_env_changes"`
 	}{
 		MergeStrategy:        string(settings.MergeStrategy),
 		DirectoryMode:        fmt.Sprintf("%04o", settings.DirectoryMode),
 		FileMode:             fmt.Sprintf("%04o", settings.FileMode),
 		RestoreOriginalValue: settings.RestoreOriginalValues,
+		ReportEnvChanges:     settings.ReportEnvChanges,
 	}
 
 	content, err := yaml.Marshal(output)
@@ -344,7 +357,7 @@ func (c *DoctorCmd) Run(rt *Runtime) error {
 		fmt.Printf("config: error (%v)\n", rt.ConfigErr)
 		return nil
 	}
-	fmt.Printf("config: ok (strategy=%s directory_mode=%04o file_mode=%04o restore_original_values=%t)\n", rt.Settings.MergeStrategy, rt.Settings.DirectoryMode, rt.Settings.FileMode, rt.Settings.RestoreOriginalValues)
+	fmt.Printf("config: ok (strategy=%s directory_mode=%04o file_mode=%04o restore_original_values=%t report_env_changes=%t)\n", rt.Settings.MergeStrategy, rt.Settings.DirectoryMode, rt.Settings.FileMode, rt.Settings.RestoreOriginalValues, rt.Settings.ReportEnvChanges)
 
 	if err := os.MkdirAll(rt.Mapper.Root, rt.Settings.DirectoryMode); err != nil {
 		return fmt.Errorf("ensure store root exists: %w", err)
@@ -521,6 +534,71 @@ func currentEnvMap() map[string]string {
 		env[item[:eq]] = item[eq+1:]
 	}
 	return env
+}
+
+type envChangeSummary struct {
+	Changed  bool
+	Loaded   []string
+	Unloaded []string
+}
+
+func summarizeEnvChange(previous []string, next map[string]string, current map[string]string) envChangeSummary {
+	nextKeys := make([]string, 0, len(next))
+	for key := range next {
+		nextKeys = append(nextKeys, key)
+	}
+	sort.Strings(nextKeys)
+
+	prevSet := make(map[string]struct{}, len(previous))
+	for _, key := range previous {
+		prevSet[key] = struct{}{}
+	}
+
+	nextSet := make(map[string]struct{}, len(nextKeys))
+	for _, key := range nextKeys {
+		nextSet[key] = struct{}{}
+	}
+
+	unloaded := make([]string, 0)
+	for _, key := range previous {
+		if _, ok := nextSet[key]; !ok {
+			unloaded = append(unloaded, key)
+		}
+	}
+	sort.Strings(unloaded)
+
+	changed := len(unloaded) > 0 || len(previous) != len(nextKeys)
+	if !changed {
+		for _, key := range nextKeys {
+			if _, ok := prevSet[key]; !ok {
+				changed = true
+				break
+			}
+		}
+	}
+
+	if !changed {
+		for _, key := range nextKeys {
+			currentValue, ok := current[key]
+			if !ok || currentValue != next[key] {
+				changed = true
+				break
+			}
+		}
+	}
+
+	return envChangeSummary{
+		Changed:  changed,
+		Loaded:   nextKeys,
+		Unloaded: unloaded,
+	}
+}
+
+func formatKeyList(keys []string) string {
+	if len(keys) == 0 {
+		return "(none)"
+	}
+	return strings.Join(keys, ", ")
 }
 
 func completionInstallPath(shellName string) (string, error) {

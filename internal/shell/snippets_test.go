@@ -18,6 +18,9 @@ func TestFishSnippetIsEvalSafe(t *testing.T) {
 	if !strings.Contains(snippet, "function __spirited_env_hook --on-variable PWD;") {
 		t.Fatalf("missing function declaration: %s", snippet)
 	}
+	if !strings.Contains(snippet, "status is-interactive; or return;") {
+		t.Fatalf("missing fish interactive guard: %s", snippet)
+	}
 	if !strings.Contains(snippet, "eval (string join \\n -- $output);") {
 		t.Fatalf("missing eval-safe output join: %s", snippet)
 	}
@@ -68,7 +71,10 @@ func TestBashSnippetIsEvalSafe(t *testing.T) {
 		t.Fatalf("Snippet() error = %v", err)
 	}
 
-	if !strings.Contains(snippet, "output=\"$(spirited-env load --shell bash)\"") {
+	if !strings.Contains(snippet, "[[ $- == *i* ]] || return") {
+		t.Fatalf("missing bash interactive guard: %s", snippet)
+	}
+	if !strings.Contains(snippet, "output=\"$(spirited-env load --shell bash --interactive)\"") {
 		t.Fatalf("missing bash load call: %s", snippet)
 	}
 	if !strings.Contains(snippet, "eval \"$output\"") {
@@ -95,7 +101,10 @@ func TestZshSnippetIsEvalSafe(t *testing.T) {
 		t.Fatalf("Snippet() error = %v", err)
 	}
 
-	if !strings.Contains(snippet, "output=\"$(spirited-env load --shell zsh)\"") {
+	if !strings.Contains(snippet, "[[ -o interactive ]] || return") {
+		t.Fatalf("missing zsh interactive guard: %s", snippet)
+	}
+	if !strings.Contains(snippet, "output=\"$(spirited-env load --shell zsh --interactive)\"") {
 		t.Fatalf("missing zsh load call: %s", snippet)
 	}
 	if !strings.Contains(snippet, "eval \"$output\"") {

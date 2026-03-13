@@ -87,11 +87,14 @@ func TestLoadSettingsDefaultsWhenMissing(t *testing.T) {
 	if !settings.RestoreOriginalValues {
 		t.Fatalf("RestoreOriginalValues = %t, want true", settings.RestoreOriginalValues)
 	}
+	if !settings.ReportEnvChanges {
+		t.Fatalf("ReportEnvChanges = %t, want true", settings.ReportEnvChanges)
+	}
 }
 
 func TestLoadSettingsReadsValues(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "config.yaml")
-	content := []byte("merge_strategy: nearest\ndirectory_mode: \"0750\"\nfile_mode: \"0640\"\nrestore_original_values: false\n")
+	content := []byte("merge_strategy: nearest\ndirectory_mode: \"0750\"\nfile_mode: \"0640\"\nrestore_original_values: false\nreport_env_changes: false\n")
 	if err := os.WriteFile(file, content, 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -112,6 +115,9 @@ func TestLoadSettingsReadsValues(t *testing.T) {
 	}
 	if settings.RestoreOriginalValues {
 		t.Fatalf("RestoreOriginalValues = %t, want false", settings.RestoreOriginalValues)
+	}
+	if settings.ReportEnvChanges {
+		t.Fatalf("ReportEnvChanges = %t, want false", settings.ReportEnvChanges)
 	}
 }
 

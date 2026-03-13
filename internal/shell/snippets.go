@@ -17,6 +17,8 @@ func Snippet(name string) (string, error) {
 
 const bashSnippet = `# spirited-env (bash)
 __spirited_env_hook() {
+  [[ $- == *i* ]] || return
+
   local current="$PWD"
   if [ "$current" = "$SPIRITED_ENV_LAST_PWD" ]; then
     return
@@ -24,7 +26,7 @@ __spirited_env_hook() {
   SPIRITED_ENV_LAST_PWD="$current"
 
   local output
-  output="$(spirited-env load --shell bash)" || return
+  output="$(spirited-env load --shell bash --interactive)" || return
   eval "$output"
 }
 
@@ -35,6 +37,8 @@ fi
 
 const zshSnippet = `# spirited-env (zsh)
 __spirited_env_hook() {
+  [[ -o interactive ]] || return
+
   local current="$PWD"
   if [[ "$current" == "$SPIRITED_ENV_LAST_PWD" ]]; then
     return
@@ -42,7 +46,7 @@ __spirited_env_hook() {
   SPIRITED_ENV_LAST_PWD="$current"
 
   local output
-  output="$(spirited-env load --shell zsh)" || return
+  output="$(spirited-env load --shell zsh --interactive)" || return
   eval "$output"
 }
 
@@ -52,7 +56,8 @@ add-zsh-hook precmd __spirited_env_hook
 `
 
 const fishSnippet = `function __spirited_env_hook --on-variable PWD;
-  set -l output (spirited-env load --shell fish);
+  status is-interactive; or return;
+  set -l output (spirited-env load --shell fish --interactive);
   if test $status -ne 0;
     return;
   end;

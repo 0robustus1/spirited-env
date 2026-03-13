@@ -36,6 +36,7 @@ type Settings struct {
 	DirectoryMode         os.FileMode
 	FileMode              os.FileMode
 	RestoreOriginalValues bool
+	ReportEnvChanges      bool
 }
 
 func ResolvePaths() (Paths, error) {
@@ -83,6 +84,7 @@ func DefaultSettings() Settings {
 		DirectoryMode:         0o700,
 		FileMode:              0o600,
 		RestoreOriginalValues: true,
+		ReportEnvChanges:      true,
 	}
 }
 
@@ -102,6 +104,7 @@ func LoadSettings(configFile string) (Settings, error) {
 		DirectoryMode         string `yaml:"directory_mode"`
 		FileMode              string `yaml:"file_mode"`
 		RestoreOriginalValues *bool  `yaml:"restore_original_values"`
+		ReportEnvChanges      *bool  `yaml:"report_env_changes"`
 	}
 
 	if err := yaml.Unmarshal(content, &raw); err != nil {
@@ -136,6 +139,10 @@ func LoadSettings(configFile string) (Settings, error) {
 
 	if raw.RestoreOriginalValues != nil {
 		settings.RestoreOriginalValues = *raw.RestoreOriginalValues
+	}
+
+	if raw.ReportEnvChanges != nil {
+		settings.ReportEnvChanges = *raw.ReportEnvChanges
 	}
 
 	return settings, nil
