@@ -24,6 +24,14 @@ const (
 	MergeNearest MergeStrategy = "nearest"
 )
 
+type MigrationSuggestionMode string
+
+const (
+	MigrationSuggestionOff        MigrationSuggestionMode = "off"
+	MigrationSuggestionIfUnmapped MigrationSuggestionMode = "if_unmapped"
+	MigrationSuggestionAlways     MigrationSuggestionMode = "always"
+)
+
 type Paths struct {
 	BaseConfigDir string
 	EnvironsDir   string
@@ -37,6 +45,7 @@ type Settings struct {
 	FileMode              os.FileMode
 	RestoreOriginalValues bool
 	ReportEnvChanges      bool
+	MigrationSuggestion   MigrationSuggestionMode
 }
 
 func ResolvePaths() (Paths, error) {
@@ -85,6 +94,7 @@ func DefaultSettings() Settings {
 		FileMode:              0o600,
 		RestoreOriginalValues: true,
 		ReportEnvChanges:      true,
+		MigrationSuggestion:   MigrationSuggestionOff,
 	}
 }
 
@@ -105,6 +115,7 @@ func LoadSettings(configFile string) (Settings, error) {
 		FileMode              string `yaml:"file_mode"`
 		RestoreOriginalValues *bool  `yaml:"restore_original_values"`
 		ReportEnvChanges      *bool  `yaml:"report_env_changes"`
+		MigrationSuggestion   string `yaml:"migration_suggestion_mode"`
 	}
 
 	if err := yaml.Unmarshal(content, &raw); err != nil {
@@ -143,6 +154,16 @@ func LoadSettings(configFile string) (Settings, error) {
 
 	if raw.ReportEnvChanges != nil {
 		settings.ReportEnvChanges = *raw.ReportEnvChanges
+	}
+
+	if raw.MigrationSuggestion != "" {
+		mode := MigrationSuggestionMode(strings.TrimSpace(raw.MigrationSuggestion))
+		switch mode {
+		case MigrationSuggestionOff, MigrationSuggestionIfUnmapped, MigrationSuggestionAlways:
+			settings.MigrationSuggestion = mode
+		default:
+			return Settings{}, fmt.Errorf("invalid migration_suggestion_mode %q (expected off, if_unmapped, or always)", raw.MigrationSuggestion)
+		}
 	}
 
 	return settings, nil

@@ -125,6 +125,19 @@ func (c *LoadCmd) Run(rt *Runtime) error {
 		}
 	}
 
+	if c.Interactive && rt.Settings.MigrationSuggestion != config.MigrationSuggestionOff {
+		targetDir, dirErr := pathmap.CanonicalizeDir(c.Dir)
+		if dirErr == nil {
+			sourcePath := filepath.Join(targetDir, ".envrc")
+			migratable := isMigratableSourceFile(sourcePath)
+			mappedExists := hasMappedEnvFile(targetDir, rt)
+			if shouldSuggestMigration(rt.Settings.MigrationSuggestion, migratable, mappedExists) {
+				fmt.Fprintf(os.Stderr, "spirited-env: detected migratable env file %s\n", sourcePath)
+				fmt.Fprintf(os.Stderr, "spirited-env: run spirited-env migrate %s to import and back up it\n", strconv.Quote(targetDir))
+			}
+		}
+	}
+
 	fmt.Print(emitted)
 	return nil
 }
@@ -290,12 +303,14 @@ func (c *ConfigShowCmd) Run(rt *Runtime) error {
 		FileMode             string `yaml:"file_mode"`
 		RestoreOriginalValue bool   `yaml:"restore_original_values"`
 		ReportEnvChanges     bool   `yaml:"report_env_changes"`
+		MigrationSuggestion  string `yaml:"migration_suggestion_mode"`
 	}{
 		MergeStrategy:        string(settings.MergeStrategy),
 		DirectoryMode:        fmt.Sprintf("%04o", settings.DirectoryMode),
 		FileMode:             fmt.Sprintf("%04o", settings.FileMode),
 		RestoreOriginalValue: settings.RestoreOriginalValues,
 		ReportEnvChanges:     settings.ReportEnvChanges,
+		MigrationSuggestion:  string(settings.MigrationSuggestion),
 	}
 
 	content, err := yaml.Marshal(output)
@@ -357,7 +372,7 @@ func (c *DoctorCmd) Run(rt *Runtime) error {
 		fmt.Printf("config: error (%v)\n", rt.ConfigErr)
 		return nil
 	}
-	fmt.Printf("config: ok (strategy=%s directory_mode=%04o file_mode=%04o restore_original_values=%t report_env_changes=%t)\n", rt.Settings.MergeStrategy, rt.Settings.DirectoryMode, rt.Settings.FileMode, rt.Settings.RestoreOriginalValues, rt.Settings.ReportEnvChanges)
+	fmt.Printf("config: ok (strategy=%s directory_mode=%04o file_mode=%04o restore_original_values=%t report_env_changes=%t migration_suggestion_mode=%s)\n", rt.Settings.MergeStrategy, rt.Settings.DirectoryMode, rt.Settings.FileMode, rt.Settings.RestoreOriginalValues, rt.Settings.ReportEnvChanges, rt.Settings.MigrationSuggestion)
 
 	if err := os.MkdirAll(rt.Mapper.Root, rt.Settings.DirectoryMode); err != nil {
 		return fmt.Errorf("ensure store root exists: %w", err)
@@ -599,6 +614,52 @@ func formatKeyList(keys []string) string {
 		return "(none)"
 	}
 	return strings.Join(keys, ", ")
+}
+
+func shouldSuggestMigration(mode config.MigrationSuggestionMode, migratable bool, mappedExists bool) bool {
+	if !migratable {
+		return false
+	}
+
+	switch mode {
+	case config.MigrationSuggestionAlways:
+		return true
+	case config.MigrationSuggestionIfUnmapped:
+		return !mappedExists
+	default:
+		return false
+	}
+}
+
+func isMigratableSourceFile(sourcePath string) bool {
+	content, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return false
+	}
+
+	values, issues, parseErr := importer.ParseAssignmentsAll(string(content))
+	if parseErr != nil {
+		return false
+	}
+	if len(issues) > 0 {
+		return false
+	}
+
+	return len(values) > 0
+}
+
+func hasMappedEnvFile(dir string, rt *Runtime) bool {
+	mappedPath, err := rt.Mapper.EnvFileForDir(dir)
+	if err != nil {
+		return false
+	}
+
+	info, statErr := os.Stat(mappedPath)
+	if statErr != nil {
+		return false
+	}
+
+	return !info.IsDir()
 }
 
 func completionInstallPath(shellName string) (string, error) {

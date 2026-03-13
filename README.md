@@ -40,6 +40,7 @@ directory_mode: "0700"
 file_mode: "0600"
 restore_original_values: true
 report_env_changes: true
+migration_suggestion_mode: off
 ```
 
 Options:
@@ -49,10 +50,13 @@ Options:
 - `file_mode`: octal permission string for created/enforced `.env` files.
 - `restore_original_values`: `true` (default) restores pre-existing shell values when a key stops being managed.
 - `report_env_changes`: `true` (default) reports loaded/unloaded variable names on directory-triggered interactive loads.
+- `migration_suggestion_mode`: controls interactive migration hints for `.envrc` files. Values: `off` (default), `if_unmapped`, `always`.
 
-When `config.yaml` is missing, defaults are used (`layered`, `0700`, `0600`, `restore_original_values: true`, `report_env_changes: true`).
+When `config.yaml` is missing, defaults are used (`layered`, `0700`, `0600`, `restore_original_values: true`, `report_env_changes: true`, `migration_suggestion_mode: off`).
 
 Change reports are emitted only for interactive shell hooks and are written to stderr, so shell-eval output on stdout remains clean for scripting.
+
+Migration suggestions are also interactive-only and written to stderr.
 
 To print the effective configuration as valid YAML (useful as a bootstrap file):
 
