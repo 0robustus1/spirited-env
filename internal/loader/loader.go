@@ -270,11 +270,9 @@ func posixQuote(s string) string {
 }
 
 func fishQuote(s string) string {
-	replacer := strings.NewReplacer(
-		`\\`, `\\\\`,
-		`"`, `\\"`,
-		"$", `\\$`,
-		"\n", `\\n`,
-	)
-	return `"` + replacer.Replace(s) + `"`
+	if s == "" {
+		return "''"
+	}
+	normalized := strings.ReplaceAll(s, "\n", "\\n")
+	return "'" + strings.ReplaceAll(normalized, "'", "'\\''") + "'"
 }
