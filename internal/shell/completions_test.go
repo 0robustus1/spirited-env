@@ -16,6 +16,7 @@ func TestCompletionFishIncludesCoreCommands(t *testing.T) {
 		"-a path",
 		"-a edit",
 		"-a load",
+		"-a refresh",
 		"-a completion",
 		"-a version",
 		"-a \"bash zsh fish\"",

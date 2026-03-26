@@ -12,6 +12,7 @@ type CLI struct {
 	Path       app.PathCmd       `cmd:"" help:"Print mapped env file path."`
 	Edit       app.EditCmd       `cmd:"" help:"Open mapped env file in $EDITOR."`
 	Load       app.LoadCmd       `cmd:"" help:"Emit shell commands for loading env."`
+	Refresh    app.RefreshCmd    `cmd:"" help:"Refresh env based on current location and state."`
 	Status     app.StatusCmd     `cmd:"" help:"Show discovered env file and key info."`
 	Move       app.MoveCmd       `cmd:"" help:"Move mapped env file to a new directory mapping."`
 	Import     app.ImportCmd     `cmd:"" help:"Import env assignments from existing file into spirited-env mapping."`

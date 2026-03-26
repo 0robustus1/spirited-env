@@ -89,7 +89,34 @@ type LoadCmd struct {
 	Interactive bool   `hidden:"" help:"Enable interactive-only reporting output."`
 }
 
+type RefreshCmd struct {
+	Dir         string `arg:"" optional:"" help:"Directory to refresh for (default: current directory)." type:"path"`
+	Shell       string `help:"Shell syntax to emit (auto-detected from parent shell if omitted)."`
+	Interactive bool   `hidden:"" help:"Enable interactive-only reporting output."`
+}
+
 func (c *LoadCmd) Run(rt *Runtime) error {
+	return runLoad(rt, c.Dir, c.Shell, c.Interactive)
+}
+
+func (c *RefreshCmd) Run(rt *Runtime) error {
+	shellName := strings.TrimSpace(c.Shell)
+	if shellName != "" {
+		if _, ok := parseShellName(shellName); !ok {
+			return fmt.Errorf("unsupported shell %q", shellName)
+		}
+	} else {
+		detected, err := detectCurrentShellByParent()
+		if err != nil {
+			return err
+		}
+		shellName = detected
+	}
+
+	return runLoad(rt, c.Dir, shellName, c.Interactive)
+}
+
+func runLoad(rt *Runtime, dir, shellName string, interactive bool) error {
 	if rt.ConfigErr != nil {
 		fmt.Fprintf(os.Stderr, "spirited-env: config error: %v\n", rt.ConfigErr)
 		return nil
@@ -99,23 +126,23 @@ func (c *LoadCmd) Run(rt *Runtime) error {
 	originals, originalsErr := loader.ParseOriginals(os.Getenv(loader.OriginalsEnv))
 	if originalsErr != nil {
 		fmt.Fprintf(os.Stderr, "spirited-env: warning: invalid %s (%v); refusing to modify environment\n", loader.OriginalsEnv, originalsErr)
-		fmt.Fprintf(os.Stderr, "spirited-env: warning: recover with eval \"$(spirited-env state reset --shell %s)\"\n", c.Shell)
+		fmt.Fprintf(os.Stderr, "spirited-env: warning: recover with eval \"$(spirited-env state reset --shell %s)\"\n", shellName)
 		return nil
 	}
 
 	current := currentEnvMap()
-	vars, _, err := resolveVariables(c.Dir, rt)
+	vars, _, err := resolveVariables(dir, rt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "spirited-env: %v\n", err)
 		return nil
 	}
 
-	emitted, emitErr := loader.Emit(loader.Shell(c.Shell), managed, vars, originals, current, rt.Settings.RestoreOriginalValues)
+	emitted, emitErr := loader.Emit(loader.Shell(shellName), managed, vars, originals, current, rt.Settings.RestoreOriginalValues)
 	if emitErr != nil {
 		return emitErr
 	}
 
-	if rt.Settings.ReportEnvChanges && c.Interactive {
+	if rt.Settings.ReportEnvChanges && interactive {
 		summary := summarizeEnvChange(managed, vars, current)
 		if summary.Changed {
 			fmt.Fprintf(os.Stderr, "spirited-env: loaded variables: %s\n", formatKeyList(summary.Loaded))
@@ -125,8 +152,8 @@ func (c *LoadCmd) Run(rt *Runtime) error {
 		}
 	}
 
-	if c.Interactive && rt.Settings.MigrationSuggestion != config.MigrationSuggestionOff {
-		targetDir, dirErr := pathmap.CanonicalizeDir(c.Dir)
+	if interactive && rt.Settings.MigrationSuggestion != config.MigrationSuggestionOff {
+		targetDir, dirErr := pathmap.CanonicalizeDir(dir)
 		if dirErr == nil {
 			sourcePath := filepath.Join(targetDir, ".envrc")
 			migratable := isMigratableSourceFile(sourcePath)
@@ -660,6 +687,77 @@ func hasMappedEnvFile(dir string, rt *Runtime) bool {
 	}
 
 	return !info.IsDir()
+}
+
+type processLookup func(pid int) (parentPID int, command string, err error)
+
+func detectCurrentShellByParent() (string, error) {
+	return detectShellFromProcessChain(os.Getppid(), processInfoForPID, 12)
+}
+
+func detectShellFromProcessChain(startPID int, lookup processLookup, maxDepth int) (string, error) {
+	pid := startPID
+	for depth := 0; depth < maxDepth && pid > 1; depth++ {
+		parentPID, command, err := lookup(pid)
+		if err != nil {
+			return "", err
+		}
+		if shellName, ok := shellNameFromCommand(command); ok {
+			return shellName, nil
+		}
+		pid = parentPID
+	}
+
+	return "", fmt.Errorf("cannot detect shell from process parentage; pass --shell bash|zsh|fish")
+}
+
+func processInfoForPID(pid int) (int, string, error) {
+	cmd := exec.Command("ps", "-o", "ppid=", "-o", "comm=", "-p", strconv.Itoa(pid))
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, "", fmt.Errorf("inspect parent process %d: %w", pid, err)
+	}
+
+	parentPID, command, parseErr := parsePSProcessInfo(string(out))
+	if parseErr != nil {
+		return 0, "", parseErr
+	}
+	return parentPID, command, nil
+}
+
+func parsePSProcessInfo(output string) (int, string, error) {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return 0, "", fmt.Errorf("empty process metadata")
+	}
+
+	fields := strings.Fields(trimmed)
+	if len(fields) < 2 {
+		return 0, "", fmt.Errorf("unexpected process metadata format: %q", trimmed)
+	}
+
+	parentPID, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return 0, "", fmt.Errorf("parse parent pid from %q: %w", trimmed, err)
+	}
+
+	command := strings.Join(fields[1:], " ")
+	return parentPID, command, nil
+}
+
+func shellNameFromCommand(command string) (string, bool) {
+	base := filepath.Base(strings.TrimSpace(command))
+	base = strings.TrimPrefix(base, "-")
+	return parseShellName(base)
+}
+
+func parseShellName(value string) (string, bool) {
+	switch value {
+	case "bash", "zsh", "fish":
+		return value, true
+	default:
+		return "", false
+	}
 }
 
 func completionInstallPath(shellName string) (string, error) {

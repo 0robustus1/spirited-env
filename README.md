@@ -70,6 +70,7 @@ spirited-env config show
 spirited-env path [dir]
 spirited-env edit [dir]
 spirited-env load [dir] --shell bash|zsh|fish
+spirited-env refresh [dir] [--shell bash|zsh|fish]
 spirited-env status [dir]
 spirited-env move <old-dir> <new-dir> [--force]
 spirited-env import [dir] [--from <path>] [--replace]
@@ -83,6 +84,8 @@ spirited-env completion install fish
 spirited-env doctor
 spirited-env version
 ```
+
+`refresh` mirrors `load` behavior and auto-detects the active shell from process parentage when `--shell` is omitted.
 
 ## Migration from direnv
 
