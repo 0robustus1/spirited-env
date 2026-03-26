@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/0robustus1/spirited-env/internal/config"
@@ -95,6 +96,10 @@ type RefreshCmd struct {
 	Interactive bool   `hidden:"" help:"Enable interactive-only reporting output."`
 }
 
+type NoEnvExecCmd struct {
+	Command []string `arg:"" optional:"" passthrough:"" help:"Command and arguments to execute."`
+}
+
 func (c *LoadCmd) Run(rt *Runtime) error {
 	return runLoad(rt, c.Dir, c.Shell, c.Interactive)
 }
@@ -114,6 +119,10 @@ func (c *RefreshCmd) Run(rt *Runtime) error {
 	}
 
 	return runLoad(rt, c.Dir, shellName, c.Interactive)
+}
+
+func (c *NoEnvExecCmd) Run(*Runtime) error {
+	return runNoEnvExec(c.Command, os.Environ(), syscall.Exec)
 }
 
 func runLoad(rt *Runtime, dir, shellName string, interactive bool) error {
@@ -641,6 +650,83 @@ func formatKeyList(keys []string) string {
 		return "(none)"
 	}
 	return strings.Join(keys, ", ")
+}
+
+type execFunc func(argv0 string, argv []string, envv []string) error
+
+func runNoEnvExec(command []string, env []string, execFn execFunc) error {
+	if len(command) == 0 {
+		return fmt.Errorf("no command provided")
+	}
+
+	childEnv, err := buildNoEnvEnvironment(env)
+	if err != nil {
+		return err
+	}
+
+	path, err := exec.LookPath(command[0])
+	if err != nil {
+		return fmt.Errorf("resolve command %q: %w", command[0], err)
+	}
+
+	argv := append([]string{path}, command[1:]...)
+	if err := execFn(path, argv, childEnv); err != nil {
+		return fmt.Errorf("exec %s: %w", path, err)
+	}
+
+	return nil
+}
+
+func buildNoEnvEnvironment(env []string) ([]string, error) {
+	envMap := envListToMap(env)
+	managed := loader.ParseManagedKeys(envMap[loader.ManagedKeysEnv])
+	originals, err := loader.ParseOriginals(envMap[loader.OriginalsEnv])
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", loader.OriginalsEnv, err)
+	}
+
+	for _, key := range managed {
+		if original, ok := originals[key]; ok {
+			if original.Set {
+				envMap[key] = original.Value
+			} else {
+				delete(envMap, key)
+			}
+			continue
+		}
+		delete(envMap, key)
+	}
+
+	delete(envMap, loader.ManagedKeysEnv)
+	delete(envMap, loader.OriginalsEnv)
+
+	return envMapToList(envMap), nil
+}
+
+func envListToMap(env []string) map[string]string {
+	out := make(map[string]string, len(env))
+	for _, entry := range env {
+		eq := strings.IndexByte(entry, '=')
+		if eq <= 0 {
+			continue
+		}
+		out[entry[:eq]] = entry[eq+1:]
+	}
+	return out
+}
+
+func envMapToList(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, key+"="+values[key])
+	}
+	return out
 }
 
 func shouldSuggestMigration(mode config.MigrationSuggestionMode, migratable bool, mappedExists bool) bool {

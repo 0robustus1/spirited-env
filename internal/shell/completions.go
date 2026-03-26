@@ -14,12 +14,13 @@ func Completion(name string) (string, error) {
 const fishCompletion = `# fish completion for spirited-env
 complete -c spirited-env -f
 
-set -l __spirited_env_commands path edit load refresh status move import migrate config state init completion doctor version
+set -l __spirited_env_commands path edit load refresh no-env-exec status move import migrate config state init completion doctor version
 
 complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a path -d "Print mapped env file path"
 complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a edit -d "Open mapped env file in $EDITOR"
 complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a load -d "Emit shell commands for loading env"
 complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a refresh -d "Refresh env based on current location and state"
+complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a no-env-exec -d "Execute command with spirited-env vars unloaded"
 complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a status -d "Show discovered env file and key info"
 complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a move -d "Move mapped env file to another directory mapping"
 complete -c spirited-env -n "not __fish_seen_subcommand_from $__spirited_env_commands" -a import -d "Import env assignments from existing file"

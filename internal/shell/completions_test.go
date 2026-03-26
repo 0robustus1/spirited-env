@@ -17,6 +17,7 @@ func TestCompletionFishIncludesCoreCommands(t *testing.T) {
 		"-a edit",
 		"-a load",
 		"-a refresh",
+		"-a no-env-exec",
 		"-a completion",
 		"-a version",
 		"-a \"bash zsh fish\"",

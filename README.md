@@ -71,6 +71,7 @@ spirited-env path [dir]
 spirited-env edit [dir]
 spirited-env load [dir] --shell bash|zsh|fish
 spirited-env refresh [dir] [--shell bash|zsh|fish]
+spirited-env no-env-exec <command> [args...]
 spirited-env status [dir]
 spirited-env move <old-dir> <new-dir> [--force]
 spirited-env import [dir] [--from <path>] [--replace]
@@ -86,6 +87,8 @@ spirited-env version
 ```
 
 `refresh` mirrors `load` behavior and auto-detects the active shell from process parentage when `--shell` is omitted.
+
+`no-env-exec` executes a command after removing spirited-env managed overlays from the child process environment (restoring original values when known).
 
 ## Migration from direnv
 
